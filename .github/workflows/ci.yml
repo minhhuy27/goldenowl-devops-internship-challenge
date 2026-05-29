@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'feature/*'
+      - master
   pull_request:
     branches:
       - master
@@ -72,6 +73,7 @@ jobs:
           tags: |
             type=sha,prefix=
             type=ref,event=branch
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5

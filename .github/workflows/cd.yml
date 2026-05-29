@@ -1,0 +1,51 @@
+name: CD Pipeline
+
+# Trigger: runs automatically after CI Pipeline completes on master
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types:
+      - completed
+    branches:
+      - master
+
+jobs:
+  # ============================================
+  # Deploy to AWS EC2
+  # ============================================
+  deploy:
+    name: 🚀 Deploy to EC2
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Login to DockerHub
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+            # Pull the latest image (built and pushed by CI pipeline)
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/goldenowl-devops-app:latest
+
+            # Stop and remove old container (if exists)
+            docker stop goldenowl-app 2>/dev/null || true
+            docker rm goldenowl-app 2>/dev/null || true
+
+            # Run new container
+            docker run -d \
+              --name goldenowl-app \
+              --restart unless-stopped \
+              -p 80:3000 \
+              ${{ secrets.DOCKERHUB_USERNAME }}/goldenowl-devops-app:latest
+
+            # Clean up old images
+            docker image prune -f
+
+            # Verify deployment
+            sleep 3
+            curl -f http://localhost/ || exit 1
