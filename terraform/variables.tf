@@ -15,3 +15,26 @@ variable "instance_type" {
   type        = string
   default     = "t2.micro"
 }
+
+variable "dockerhub_image" {
+  description = "DockerHub image name (e.g., username/goldenowl-devops-app)"
+  type        = string
+}
+
+variable "asg_min_size" {
+  description = "Minimum number of instances in ASG"
+  type        = number
+  default     = 1
+}
+
+variable "asg_max_size" {
+  description = "Maximum number of instances in ASG"
+  type        = number
+  default     = 3
+}
+
+variable "asg_desired_capacity" {
+  description = "Desired number of instances in ASG"
+  type        = number
+  default     = 2
+}
