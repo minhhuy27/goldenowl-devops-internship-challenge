@@ -9,43 +9,65 @@ on:
     branches:
       - master
 
+env:
+  ASG_NAME: goldenowl-devops-asg
+  AWS_REGION: ap-southeast-1
+
 jobs:
   # ============================================
-  # Deploy to AWS EC2
+  # Deploy via ASG Instance Refresh
   # ============================================
   deploy:
-    name: 🚀 Deploy to EC2
+    name: 🚀 Deploy to ASG
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-      - name: Deploy to EC2 via SSH
-        uses: appleboy/ssh-action@v1
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            # Login to DockerHub
-            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-            # Pull the latest image (built and pushed by CI pipeline)
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/goldenowl-devops-app:latest
+      - name: Trigger ASG Instance Refresh
+        run: |
+          echo "🚀 Starting instance refresh for ASG: $ASG_NAME"
 
-            # Stop and remove old container (if exists)
-            docker stop goldenowl-app 2>/dev/null || true
-            docker rm goldenowl-app 2>/dev/null || true
+          REFRESH_ID=$(aws autoscaling start-instance-refresh \
+            --auto-scaling-group-name "$ASG_NAME" \
+            --preferences '{"MinHealthyPercentage": 50, "InstanceWarmup": 120}' \
+            --query 'InstanceRefreshId' \
+            --output text)
 
-            # Run new container
-            docker run -d \
-              --name goldenowl-app \
-              --restart unless-stopped \
-              -p 80:3000 \
-              ${{ secrets.DOCKERHUB_USERNAME }}/goldenowl-devops-app:latest
+          echo "Instance Refresh ID: $REFRESH_ID"
+          echo "REFRESH_ID=$REFRESH_ID" >> $GITHUB_ENV
 
-            # Clean up old images
-            docker image prune -f
+      - name: Wait for Instance Refresh to complete
+        run: |
+          echo "⏳ Waiting for instance refresh to complete..."
 
-            # Verify deployment
-            sleep 3
-            curl -f http://localhost/ || exit 1
+          while true; do
+            STATUS=$(aws autoscaling describe-instance-refreshes \
+              --auto-scaling-group-name "$ASG_NAME" \
+              --instance-refresh-ids "$REFRESH_ID" \
+              --query 'InstanceRefreshes[0].Status' \
+              --output text)
+
+            echo "Current status: $STATUS"
+
+            case $STATUS in
+              Successful)
+                echo "✅ Instance refresh completed successfully!"
+                break
+                ;;
+              Failed|Cancelled|RollbackSuccessful|RollbackFailed)
+                echo "❌ Instance refresh failed with status: $STATUS"
+                exit 1
+                ;;
+              *)
+                echo "⏳ Still in progress... waiting 30s"
+                sleep 30
+                ;;
+            esac
+          done
