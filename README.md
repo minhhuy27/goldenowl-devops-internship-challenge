@@ -139,6 +139,8 @@ graph TD
 │   ├── outputs.tf                # Output values (ALB DNS, ASG name)
 │   ├── userdata.sh               # EC2 bootstrap: install Docker + run app
 │   └── terraform.tfvars.example  # Example variable values
+├── docs/
+│   └── ci-cd-flow.png             # Flow diagram exported image
 └── README.md
 ```
 
