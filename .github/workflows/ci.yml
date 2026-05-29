@@ -5,9 +5,21 @@ on:
     branches:
       - 'feature/*'
       - master
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'terraform/**'
+      - '.gitignore'
+      - 'LICENSE'
   pull_request:
     branches:
       - master
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'terraform/**'
+      - '.gitignore'
+      - 'LICENSE'
 
 env:
   DOCKERHUB_REPO: ${{ secrets.DOCKERHUB_USERNAME }}/goldenowl-devops-app
